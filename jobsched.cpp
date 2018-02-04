@@ -40,8 +40,9 @@ class JobScheduler {
     cout << "pushing job\n";
     auto target_time = steady_clock::now() + milliseconds(ms);
     auto sjob = SJob(target_time, job);
+    unique_lock<mutex> lock(mtx);
     pq.push(sjob);
-    // cv.notify
+    cv.notify_one();
   }
 
   /**
@@ -49,26 +50,27 @@ class JobScheduler {
    */
   void stop() {
     cout << "stopping sched\n";
-    done = true;
-    cv.notify_one();
+    {
+      unique_lock<mutex> lock(mtx);
+      done = true;
+      cv.notify_one();
+    }
     sched_thread.join();
   }
 
  private:
   void run() {
-    // while true
-    //   time = pq.empty ? infinity : (pq.peek.time - now)
-    //   cv.wait time
-    for (int i=0; i!=1000000000; ++i) {
-      if (i%100000000 == 0) {
-	if (!pq.empty()) {
-	  pq.top().job();
-	  pq.pop();
-	}
-	if (pq.empty() && done) {
-	  break;
-	}
-	cout << i << "\n";
+    while (true) {
+      unique_lock<mutex> lock(mtx);
+      cout << "Waiting\n";
+      while (pq.empty() && !done) cv.wait(lock);
+      cout << "Woke\n";
+      if (!pq.empty()) {
+	pq.top().job();
+	pq.pop();
+      }
+      if (pq.empty() && done) {
+	break;
       }
     }
   }
