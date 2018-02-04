@@ -1,13 +1,23 @@
 #include <chrono>
 #include <functional>
 #include <iostream>
+#include <queue>
 #include <thread>
+#include <vector>
 
 using namespace std;
 using namespace std::chrono;
 
 class JobScheduler {
+  struct SJob {
+    time_point<steady_clock> target;
+    function<void()> job;
+    SJob(time_point<steady_clock> t, function<void()> j) : target(t), job(j) {}
+    bool operator<(SJob rhs) const { return target < rhs.target; }
+  };
+  
   thread sched_thread;
+  priority_queue<SJob> pq;
  public:
   /**
    * Starts the executor. Returns immediately
@@ -21,9 +31,11 @@ class JobScheduler {
    * Executes/Schedules the job "job" after "milliseconds"
    * It will return immediately 
    */
-  void schedule(std::function<void()> job, uint32_t milliseconds) {
+  void schedule(std::function<void()> job, uint32_t ms) {
     cout << "pushing job\n";
-    // pq.push job
+    auto target_time = steady_clock::now() + milliseconds(ms);
+    auto sjob = SJob(target_time, job);
+    pq.push(sjob);
     // cv.notify
   }
 
