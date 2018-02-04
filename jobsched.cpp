@@ -4,11 +4,20 @@
 #include <iostream>
 #include <mutex>
 #include <queue>
+#include <string>
+#include <sstream>
 #include <thread>
 #include <vector>
 
 using namespace std;
 using namespace std::chrono;
+
+string debug_time(time_point<steady_clock> tp) {
+  stringstream ss;
+  auto ms = duration_cast<milliseconds>(tp.time_since_epoch());
+  ss << ms.count()/1000.0;
+  return ss.str();
+}
 
 class JobScheduler {
   struct SJob {
@@ -16,10 +25,11 @@ class JobScheduler {
     function<void()> job;
     SJob(time_point<steady_clock> t, function<void()> j) : target(t), job(j) {}
     bool operator<(SJob rhs) const { return target < rhs.target; }
+    bool operator>(SJob rhs) const { return target > rhs.target; }
   };
   
   thread sched_thread;
-  priority_queue<SJob> pq;
+  priority_queue<SJob, vector<SJob>, greater<SJob>> pq;
   bool done = false;
   mutex mtx;
   condition_variable cv;
@@ -37,8 +47,8 @@ class JobScheduler {
    * It will return immediately 
    */
   void schedule(std::function<void()> job, uint32_t ms) {
-    cout << "pushing job\n";
     auto target_time = steady_clock::now() + milliseconds(ms);
+    cout << "pushing " << ms << " job at " << debug_time(steady_clock::now()) << " for " << debug_time(target_time) << "\n";
     auto sjob = SJob(target_time, job);
     unique_lock<mutex> lock(mtx);
     pq.push(sjob);
@@ -62,12 +72,19 @@ class JobScheduler {
   void run() {
     while (true) {
       unique_lock<mutex> lock(mtx);
-      cout << "Waiting\n";
-      while (pq.empty() && !done) cv.wait(lock);
-      cout << "Woke\n";
+      //cout << "Wait looping at " << debug_time(steady_clock::now()) << "\n";
+      while (!done && (pq.empty() || pq.top().target >= steady_clock::now())) {
+	//cout << "Waiting at " << debug_time(steady_clock::now()) << "\n";
+	cv.wait(lock);
+      }
+      //cout << "Woke\n";
       if (!pq.empty()) {
-	pq.top().job();
-	pq.pop();
+	auto sjob = pq.top();
+	auto now = steady_clock::now();
+	if (sjob.target <= now) {
+	  sjob.job();
+	  pq.pop();
+	}
       }
       if (pq.empty() && done) {
 	break;
@@ -77,9 +94,9 @@ class JobScheduler {
 };
 
 function<void()> make_job(int index, time_point<steady_clock> start_time) {
-  time_point<steady_clock> sched_time = steady_clock::now();
+  auto sched_time = steady_clock::now();
   return [=] {
-    time_point<steady_clock> exec_time = steady_clock::now();
+    auto exec_time = steady_clock::now();
     // TODO: min width for times?
     cout << "job # " << index
 	 << ", Scheduled after ms: "
