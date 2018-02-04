@@ -1,6 +1,8 @@
 #include <chrono>
+#include <condition_variable>
 #include <functional>
 #include <iostream>
+#include <mutex>
 #include <queue>
 #include <thread>
 #include <vector>
@@ -18,6 +20,9 @@ class JobScheduler {
   
   thread sched_thread;
   priority_queue<SJob> pq;
+  bool done = false;
+  mutex mtx;
+  condition_variable cv;
  public:
   /**
    * Starts the executor. Returns immediately
@@ -44,8 +49,8 @@ class JobScheduler {
    */
   void stop() {
     cout << "stopping sched\n";
-    // pq.push poison
-    // cv.notify
+    done = true;
+    cv.notify_one();
     sched_thread.join();
   }
 
@@ -56,6 +61,13 @@ class JobScheduler {
     //   cv.wait time
     for (int i=0; i!=1000000000; ++i) {
       if (i%100000000 == 0) {
+	if (!pq.empty()) {
+	  pq.top().job();
+	  pq.pop();
+	}
+	if (pq.empty() && done) {
+	  break;
+	}
 	cout << i << "\n";
       }
     }
