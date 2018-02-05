@@ -139,10 +139,10 @@ function<void()> make_job(int index,
   };
 }
 
-int main() {
+int main(int argc, char *argv[]) {
   JobScheduler scheduler;
   scheduler.start();
-  time_point<steady_clock> start_time = steady_clock::now();
+  auto start_time = steady_clock::now();
 
   /* Create and schedule for execution at least 5 jobs at different times */
   /* Each job should print for proof of execution the following line: */
@@ -155,9 +155,24 @@ job # 1, Scheduled after ms: 5000, Executed after ms: 5000
 job # 0, Scheduled after ms: 6000, Executed after ms: 6001
   */
 
-  for (int i=0; i!=5; ++i) {
-    auto wait = 6000 - i*1000;
-    scheduler.schedule(make_job(i, start_time, wait), wait);
+  if (argc < 2) {
+    for (int i=0; i!=5; ++i) {
+      auto wait = 6000 - i*1000;
+      scheduler.schedule(make_job(i, start_time, wait), wait);
+    }
+  } else {
+    for (int i=1; i!=argc; ++i) {
+      try {
+	auto wait = stol(argv[i]);
+	if (wait < 0) {
+	  cerr << argv[i] << ": negative times not supported; use 0\n";
+	} else {
+	  scheduler.schedule(make_job(i-1, start_time, wait), wait);
+	}
+      } catch (invalid_argument &x) {
+	cerr << argv[i] << ": " << x.what() << "\n";
+      }
+    }
   }
 
   scheduler.stop();
