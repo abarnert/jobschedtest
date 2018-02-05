@@ -31,3 +31,5 @@
 *.out
 *.app
 jobsched
+jobsched_d
+jobsched_d.dSYM
