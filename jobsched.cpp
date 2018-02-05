@@ -10,7 +10,7 @@
 #include <thread>
 #include <vector>
 
-#define DEBUG_TIMER 1
+//#define DEBUG_TIMER 1
 
 using namespace std;
 using namespace std::chrono;
@@ -20,18 +20,22 @@ mutex _log_mtx;
 #define LOG_TIMER(expr) \
   do { \
     unique_lock<mutex> _log_lock(_log_mtx); \
-    cerr << debug_time(steady_clock::now()) << ": " << expr << endl; \
+    cerr << steady_clock::now() << ": " << expr << endl; \
   } while (false)
 #else
 #define LOG_TIMER(expr)
 #endif
 
-string debug_time(time_point<steady_clock> tp) {
+template <typename OS, typename Clock>
+OS &operator<<(OS &os, time_point<Clock> tp) {
   stringstream ss;
-  auto tpms = time_point_cast<milliseconds>(tp);
-  auto ms = tpms.time_since_epoch();
-  ss << fixed << setprecision(3) << (ms.count()/1000.0);
-  return ss.str();
+  auto ms = time_point_cast<milliseconds>(tp).time_since_epoch().count();
+  auto hr = ms / 3600000; ms %= 3600000;
+  auto mn = ms / 60000; ms %= 60000;
+  auto sc = ms / 1000; ms %= 1000;
+  ss << setfill('0') << setw(2)
+     << hr << ':' << mn << ':' << sc << '.' << setw(3) << ms;
+  return os << ss.str();
 }
 
 class JobScheduler {
@@ -63,7 +67,7 @@ class JobScheduler {
    */
   void schedule(std::function<void()> job, uint32_t ms) {
     auto target_time = steady_clock::now() + milliseconds(ms);
-    LOG_TIMER("pushing " << ms << " job for " << debug_time(target_time));
+    LOG_TIMER("pushing job @ " << target_time << " (" << ms << "ms)");
     auto sjob = SJob(target_time, job);
     unique_lock<mutex> lock(mtx);
     pq.push(sjob);
@@ -94,17 +98,17 @@ class JobScheduler {
   void run() {
     while (true) {
       unique_lock<mutex> lock(mtx);
-      LOG_TIMER("Wait looping");
+      LOG_TIMER("wait looping");
       while (!ready()) {
 	if (pq.empty()) {
-	  LOG_TIMER("Waiting forever");
+	  LOG_TIMER("waiting forever");
 	  cv.wait(lock);
 	} else {
-	  LOG_TIMER("Waiting until " << debug_time(pq.top().target));
+	  LOG_TIMER("waiting until " << pq.top().target);
 	  cv.wait_until(lock, pq.top().target);
 	}
       }
-      LOG_TIMER("Woke");
+      LOG_TIMER("woke");
       if (!pq.empty()) {
 	auto sjob = pq.top();
 	auto now = steady_clock::now();
@@ -158,4 +162,3 @@ job # 0, Scheduled after ms: 6000, Executed after ms: 6001
 
   scheduler.stop();
 }
-
