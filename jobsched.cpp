@@ -1,6 +1,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <functional>
+#include <iomanip>
 #include <iostream>
 #include <mutex>
 #include <queue>
@@ -25,8 +26,7 @@ string debug_time(time_point<steady_clock> tp) {
   stringstream ss;
   auto tpms = time_point_cast<milliseconds>(tp);
   auto ms = tpms.time_since_epoch();
-  //auto ms = duration_cast<milliseconds>(tp.time_since_epoch()) + milliseconds(1);
-  ss << ms.count()/1000.0;
+  ss << fixed << setprecision(3) << (ms.count()/1000.0);
   return ss.str();
 }
 
