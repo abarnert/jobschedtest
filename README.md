@@ -65,3 +65,35 @@ catch any errors in dividing/multiplying by 1000 at compile time,
 allow jobs scheduled in the past to have the same effect as right now
 instead of wrapping around to 49 days in the future, etc.
 
+## Possibilities for improvements
+
+All of these are things I actually tested out for Flash Media Server's
+job scheduler. Of course a different project might have different
+needs, not to mention that hardware and kernels have changed a lot in
+the past decade, but:
+
+* Pulling all the ready jobs off the queue instead of one reduces
+  total scheduler work, but can cause the scheduler to take more than
+  one timeslice.
+* Replacing the pqueue of jobs with a pqueue of 20ms linked-list
+  buckets reduces both total work and work per iteration, and is good
+  enough for at least FMS's use case.
+* A circular array of buckets (with a pqueue behind it for far-future
+  jobs) seems like it should reduce contention on pushes, but didn't
+  do much.
+* An intake list per N threads (CAS a job and only lock/notify if the
+  list had been empty) doesn't seem like it should reduce contention
+  much, but it made a huge difference, enough to effectively solve the
+  problem.
+* Core affinity for each thread group, or just an intake list per core
+  instead of per thread group, should make it even better, but didn't
+  seem to.
+* `now()` isn't free.
+  Stale `now` values are worth causing intentionally during
+  development to make sure the code handles them as well as possible,
+  but then reduce them as much as possible for production because "as
+  well as possible" still isn't great.
+* `now()` can be ridiculously slow on some relatively common (2000s)
+  server hardware with the standard APIs in RHEL5 and Win2003. The
+  only solution is to write a bunch of non-portable implementations
+  and test them at install time.
