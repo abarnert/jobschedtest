@@ -17,7 +17,11 @@ using namespace std::chrono;
 
 #ifdef DEBUG_TIMER
 mutex _log_mtx;
-#define LOG_TIMER(expr) do { unique_lock<mutex> _log_lock(_log_mtx); cerr << expr; } while (false)
+#define LOG_TIMER(expr) \
+  do { \
+    unique_lock<mutex> _log_lock(_log_mtx); \
+    cerr << debug_time(steady_clock::now()) << ": " << expr << endl; \
+  } while (false)
 #else
 #define LOG_TIMER(expr)
 #endif
@@ -49,7 +53,7 @@ class JobScheduler {
    * Starts the executor. Returns immediately
    */
   void start() {
-    LOG_TIMER("starting sched\n");
+    LOG_TIMER("starting sched");
     sched_thread = thread([=]{run();});
   }
 
@@ -59,9 +63,7 @@ class JobScheduler {
    */
   void schedule(std::function<void()> job, uint32_t ms) {
     auto target_time = steady_clock::now() + milliseconds(ms);
-    LOG_TIMER("pushing " << ms
-	      << " job at " << debug_time(steady_clock::now())
-	      << " for " << debug_time(target_time) << endl);
+    LOG_TIMER("pushing " << ms << " job for " << debug_time(target_time));
     auto sjob = SJob(target_time, job);
     unique_lock<mutex> lock(mtx);
     pq.push(sjob);
@@ -72,7 +74,7 @@ class JobScheduler {
    * Will return after all the jobs have been executed
    */
   void stop() {
-    LOG_TIMER("stopping sched\n");
+    LOG_TIMER("stopping sched");
     {
       unique_lock<mutex> lock(mtx);
       done = true;
@@ -92,20 +94,17 @@ class JobScheduler {
   void run() {
     while (true) {
       unique_lock<mutex> lock(mtx);
-      LOG_TIMER("Wait looping at " << debug_time(steady_clock::now()) << endl);
+      LOG_TIMER("Wait looping");
       while (!ready()) {
 	if (pq.empty()) {
-	  LOG_TIMER("Waiting forever at "
-		    << debug_time(steady_clock::now()) << endl);
+	  LOG_TIMER("Waiting forever");
 	  cv.wait(lock);
 	} else {
-	  LOG_TIMER("Waiting until "
-		    << debug_time(pq.top().target)
-		    << " at " << debug_time(steady_clock::now()) << endl);
+	  LOG_TIMER("Waiting until " << debug_time(pq.top().target));
 	  cv.wait_until(lock, pq.top().target);
 	}
       }
-      LOG_TIMER("Woke at " << debug_time(steady_clock::now()) << endl);
+      LOG_TIMER("Woke");
       if (!pq.empty()) {
 	auto sjob = pq.top();
 	auto now = steady_clock::now();
@@ -127,7 +126,6 @@ function<void()> make_job(int index,
   auto sched_time = steady_clock::now();
   return [=] {
     auto exec_time = steady_clock::now();
-    // TODO: min width for times?
     cout << "job # " << index
 	 << ", Scheduled after ms: "
 	 << duration_cast<milliseconds>(sched_time + milliseconds(wait) - start_time).count()
