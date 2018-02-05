@@ -88,12 +88,13 @@ the past decade, but:
 * Core affinity for each thread group, or just an intake list per core
   instead of per thread group, should make it even better, but didn't
   seem to.
-* `now()` isn't free.
-  Stale `now` values are worth causing intentionally during
+* `now()` isn't free. Reducing calls helps, but...
+* Stale `now` values are worth causing intentionally during
   development to make sure the code handles them as well as possible,
   but then reduce them as much as possible for production because "as
   well as possible" still isn't great.
 * `now()` can be ridiculously slow on some relatively common (2000s)
   server hardware with the standard APIs in RHEL5 and Win2003. The
   only solution is to write a bunch of non-portable implementations
-  and test them at install time.
+  and test them at install time. Fortunately, even old hardware 
+  doesn't have this problem with newer Linux (not sure about Windows).
